@@ -1,0 +1,1415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>🤖 GPT-Style Decoder — Interactive Architecture</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --panel: #111a30;
+    --panel2: #0f172a;
+    --border: #1f2a44;
+    --text: #e6edf6;
+    --muted: #9aa7bd;
+    --accent: #7c9cff;
+    --accent2: #22d3ee;
+    --warn: #f59e0b;
+    --ok: #10b981;
+    --input: #60a5fa;
+    --embed: #f59e0b;
+    --mha: #8b5cf6;
+    --head: #c084fc;
+    --ffn: #22d3ee;
+    --norm: #10b981;
+    --linear: #14b8a6;
+    --softmax: #eab308;
+    --output: #a78bfa;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: radial-gradient(1200px 800px at 10% -10%, #13204a 0%, var(--bg) 60%) fixed;
+    color: var(--text);
+    min-height: 100vh;
+    padding: 20px;
+  }
+
+  header {
+    max-width: 1400px;
+    margin: 0 auto 16px auto;
+    padding: 18px 22px;
+    background: linear-gradient(135deg, #131d38 0%, #0f172a 100%);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+  }
+  header h1 { margin: 0 0 6px 0; font-size: 22px; letter-spacing: 0.3px; }
+  header p { margin: 0; color: var(--muted); font-size: 13px; }
+
+  /* Control panel */
+  .controls {
+    max-width: 1400px;
+    margin: 0 auto 16px auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 14px;
+    padding: 16px 18px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+  .control {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .control label {
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+  }
+  .control label .value {
+    color: var(--accent2);
+    font-weight: 700;
+    font-size: 14px;
+    background: rgba(34,211,238,0.1);
+    padding: 2px 10px;
+    border-radius: 20px;
+    border: 1px solid rgba(34,211,238,0.3);
+  }
+  .control input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 4px;
+    background: linear-gradient(to right, var(--accent) 0%, var(--accent2) 100%);
+    outline: none;
+    cursor: pointer;
+  }
+  .control input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid var(--accent);
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  }
+  .control input[type="range"]::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid var(--accent);
+    cursor: pointer;
+  }
+
+  .presets {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .presets button {
+    background: linear-gradient(135deg, #1e293b, #172036);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all .15s;
+    font-weight: 600;
+  }
+  .presets button:hover {
+    border-color: var(--accent);
+    transform: translateY(-1px);
+  }
+  .presets button.active {
+    background: linear-gradient(135deg, #2d3f6d, #1a2546);
+    border-color: var(--accent);
+  }
+
+  /* Legend */
+  .legend {
+    max-width: 1400px;
+    margin: 0 auto 16px auto;
+    padding: 10px 16px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 3px;
+    display: inline-block;
+  }
+
+  /* Main stage */
+  .stage {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 16px;
+  }
+  @media (max-width: 1000px) {
+    .stage { grid-template-columns: 1fr; }
+  }
+
+  .arch-panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.28);
+    overflow: hidden;
+  }
+  .arch-panel h2 {
+    margin: 4px 0 4px 0;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .arch-panel .subtitle {
+    color: var(--muted);
+    font-size: 12px;
+    margin-bottom: 10px;
+  }
+
+  .svg-wrap {
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: auto;
+    max-height: 78vh;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background:
+      radial-gradient(600px 400px at 50% 0%, rgba(124,156,255,0.06), transparent 60%),
+      linear-gradient(180deg, #0c1228 0%, #0a0f22 100%);
+  }
+  svg.arch {
+    display: block;
+    min-width: 100%;
+  }
+
+  /* Info sidebar */
+  .info-panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    height: fit-content;
+    position: sticky;
+    top: 16px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.28);
+  }
+  .info-panel h3 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .info-panel .current {
+    padding: 12px;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 12px;
+    min-height: 120px;
+  }
+  .info-panel .current h4 {
+    margin: 0 0 6px 0;
+    font-size: 13px;
+  }
+  .info-panel .current p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .info-panel .current code {
+    background: #0a1020;
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: var(--accent2);
+    font-size: 11px;
+  }
+
+  .stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .stat {
+    padding: 10px;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .stat .lbl {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+  }
+  .stat .val {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--accent2);
+  }
+  .stat .val.small { font-size: 13px; }
+
+  /* Nodes */
+  .node rect, .node circle {
+    stroke-width: 1.5;
+    transition: all .2s;
+    cursor: pointer;
+  }
+  .node text {
+    pointer-events: none;
+    font-family: 'Inter', sans-serif;
+    text-anchor: middle;
+    dominant-baseline: middle;
+    fill: #fff;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .node text.sub {
+    font-size: 10px;
+    font-weight: 400;
+    fill: rgba(255,255,255,0.75);
+  }
+  .node:hover rect, .node:hover circle {
+    filter: brightness(1.3) drop-shadow(0 0 8px currentColor);
+  }
+  .node.selected rect, .node.selected circle {
+    stroke: var(--accent2) !important;
+    stroke-width: 3 !important;
+    filter: drop-shadow(0 0 12px var(--accent2));
+  }
+
+  /* Edges */
+  .edge {
+    fill: none;
+    stroke: #6b7a99;
+    stroke-width: 2;
+    opacity: 0.65;
+  }
+  .edge.residual {
+    stroke: var(--warn);
+    stroke-dasharray: 5 4;
+    opacity: 0.85;
+  }
+  .edge.head {
+    stroke: var(--head);
+    stroke-width: 1.4;
+    opacity: 0.55;
+  }
+  .arrow-head { fill: #6b7a99; }
+  .arrow-residual { fill: var(--warn); }
+  .arrow-head-attn { fill: var(--head); }
+
+  /* Block outline */
+  .block-outline {
+    fill: rgba(124,156,255,0.03);
+    stroke: rgba(124,156,255,0.35);
+    stroke-width: 1.5;
+    stroke-dasharray: 5 4;
+    rx: 10;
+  }
+  .block-label {
+    fill: var(--accent);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .block-badge {
+    fill: rgba(124,156,255,0.15);
+    stroke: var(--accent);
+    stroke-width: 1;
+  }
+  .block-badge-text {
+    fill: var(--accent);
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  /* ================= NEURON NETWORK SECTION ================= */
+  .neuron-section {
+    max-width: 1400px;
+    margin: 22px auto 0 auto;
+  }
+
+  .neuron-header {
+    padding: 18px 22px;
+    background: linear-gradient(135deg, #131d38 0%, #0f172a 100%);
+    border: 1px solid var(--border);
+    border-radius: 14px 14px 0 0;
+    border-bottom: none;
+  }
+  .neuron-header h2 {
+    margin: 0 0 4px 0;
+    font-size: 20px;
+  }
+  .neuron-header p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .neuron-controls {
+    padding: 14px 18px;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+  }
+
+  .neuron-stage {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 0 0 14px 14px;
+    padding: 14px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.28);
+  }
+
+  .neuron-svg-wrap {
+    width: 100%;
+    overflow-x: auto;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: #1a1a1a;
+  }
+  svg.neuron-net {
+    display: block;
+    width: 100%;
+    min-width: 800px;
+    height: 520px;
+  }
+
+  /* Neuron styling — matches the reference image */
+  .neuron {
+    stroke: #0d0d0d;
+    stroke-width: 1;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .neuron:hover {
+    stroke: #22d3ee;
+    stroke-width: 2;
+    filter: drop-shadow(0 0 6px #22d3ee);
+  }
+  .connection {
+    stroke: #22c55e;
+    stroke-opacity: 0.55;
+    fill: none;
+    transition: all .15s;
+    pointer-events: none;
+  }
+  .connection.highlighted {
+    stroke: #22d3ee;
+    stroke-opacity: 1;
+    stroke-width: 2.5 !important;
+    filter: drop-shadow(0 0 4px #22d3ee);
+  }
+  .layer-label {
+    fill: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
+    text-anchor: middle;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+  }
+  .layer-sublabel {
+    fill: #6b7a99;
+    font-size: 10px;
+    text-anchor: middle;
+  }
+
+  /* Layer editor pills */
+  .layer-editor {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-top: 10px;
+  }
+  .layer-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: linear-gradient(135deg, #1e293b, #172036);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .layer-pill .pill-label {
+    color: var(--muted);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .layer-pill input {
+    width: 44px;
+    background: #0a1020;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 3px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    text-align: center;
+    font-weight: 700;
+  }
+  .layer-pill input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .layer-pill .remove {
+    background: transparent;
+    border: none;
+    color: var(--danger, #ef4444);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 2px;
+    font-weight: 700;
+  }
+  .layer-pill .remove:hover { color: #fca5a5; }
+  .layer-pill.input-layer { border-color: var(--input); }
+  .layer-pill.output-layer { border-color: var(--output); }
+
+  .layer-editor-actions {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+  }
+  .layer-editor-actions button {
+    background: linear-gradient(135deg, #2d3f6d, #1a2546);
+    border: 1px solid var(--accent);
+    color: var(--text);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .layer-editor-actions button:hover { filter: brightness(1.15); }
+  .layer-editor-actions button.secondary {
+    background: #1e293b;
+    border-color: var(--border);
+  }
+
+  .neuron-info {
+    padding: 10px 14px;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .neuron-info b { color: var(--accent2); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🤖 GPT-Style Decoder — Interactive Architecture</h1>
+  <p>Adjust <b>layers</b> (number of transformer blocks) and <b>attention heads</b> with the sliders. The diagram rebuilds live. Click any node to read what it does.</p>
+</header>
+
+<!-- CONTROLS -->
+<div class="controls">
+  <div class="control">
+    <label>🧱 Transformer Blocks (N layers) <span class="value" id="val-layers">6</span></label>
+    <input type="range" id="slider-layers" min="1" max="24" value="6" />
+    <div class="presets" id="presets-layers">
+      <button data-val="1">1</button>
+      <button data-val="6">6</button>
+      <button data-val="12">12 (GPT-2 sm)</button>
+      <button data-val="24">24 (GPT-2 md)</button>
+    </div>
+  </div>
+
+  <div class="control">
+    <label>🎭 Attention Heads (per block) <span class="value" id="val-heads">8</span></label>
+    <input type="range" id="slider-heads" min="1" max="16" value="8" />
+    <div class="presets" id="presets-heads">
+      <button data-val="1">1</button>
+      <button data-val="4">4</button>
+      <button data-val="8">8</button>
+      <button data-val="12">12 (GPT-2)</button>
+      <button data-val="16">16</button>
+    </div>
+  </div>
+
+  <div class="control">
+    <label>📐 d_model <span class="value" id="val-dmodel">768</span></label>
+    <input type="range" id="slider-dmodel" min="128" max="2048" value="768" step="64" />
+    <div class="presets" id="presets-dmodel">
+      <button data-val="768">768 (GPT-2 sm)</button>
+      <button data-val="1024">1024 (GPT-2 md)</button>
+      <button data-val="1600">1600 (GPT-2 xl)</button>
+    </div>
+  </div>
+</div>
+
+<!-- LEGEND -->
+<div class="legend">
+  <span class="legend-item"><span class="dot" style="background:var(--input)"></span>Input Tokens</span>
+  <span class="legend-item"><span class="dot" style="background:var(--embed)"></span>Embedding</span>
+  <span class="legend-item"><span class="dot" style="background:var(--mha)"></span>Masked MHA</span>
+  <span class="legend-item"><span class="dot" style="background:var(--head)"></span>Attention Head</span>
+  <span class="legend-item"><span class="dot" style="background:var(--norm)"></span>Add &amp; Norm</span>
+  <span class="legend-item"><span class="dot" style="background:var(--ffn)"></span>Feed Forward</span>
+  <span class="legend-item"><span class="dot" style="background:var(--linear)"></span>Linear</span>
+  <span class="legend-item"><span class="dot" style="background:var(--softmax)"></span>Softmax</span>
+  <span class="legend-item"><span class="dot" style="background:var(--warn)"></span>Residual Skip</span>
+</div>
+
+<!-- MAIN STAGE -->
+<div class="stage">
+  <div class="arch-panel">
+    <h2>📊 Full Network Graph</h2>
+    <div class="subtitle">Every node and connection is drawn. Scroll the diagram if it extends beyond the viewport.</div>
+    <div class="svg-wrap">
+      <svg id="svg-main" class="arch" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+  </div>
+
+  <aside class="info-panel">
+    <h3>💡 Component Details</h3>
+    <div class="current" id="info-current">
+      <h4>Ready</h4>
+      <p>Click any node in the diagram to see what it does, with formulas and tensor shapes.</p>
+    </div>
+
+    <h3>📈 Model Stats</h3>
+    <div class="stats" id="stats"></div>
+  </aside>
+</div>
+
+<!-- ========================================================================
+     NEURON-LEVEL NETWORK SECTION (below the architecture)
+     ======================================================================== -->
+<div class="neuron-section">
+  <div class="neuron-header">
+    <h2>🧠 Neuron-Level View of the Transformer Above</h2>
+    <p>The schematic above draws <i>blocks</i>. This section draws the <b>actual neurons and weights</b> for the same transformer — one circle per neuron, one green line per weight. Layer sizes come from the sliders above (<b>d_model</b>, <b>blocks</b>, <b>heads</b>). Neurons are capped visually so huge models stay readable.</p>
+  </div>
+
+  <div class="neuron-controls">
+    <div style="display:flex; flex-wrap:wrap; gap:14px; align-items:center; width:100%;">
+      <div class="control" style="min-width:200px; flex:1;">
+        <label>🔢 Seq length (tokens) <span class="value" id="val-seq">5</span></label>
+        <input type="range" id="slider-seq" min="1" max="10" value="5" />
+      </div>
+      <div class="control" style="min-width:200px; flex:1;">
+        <label>👁️ Visual neuron cap <span class="value" id="val-cap">16</span></label>
+        <input type="range" id="slider-cap" min="4" max="32" value="16" />
+      </div>
+      <div class="control" style="min-width:140px;">
+        <label>🎚️ Edge density <span class="value" id="val-density">30%</span></label>
+        <input type="range" id="slider-density" min="5" max="100" value="30" />
+      </div>
+    </div>
+  </div>
+
+  <div class="neuron-stage">
+    <div class="neuron-info" style="margin-bottom:10px;">
+      <span>Stages: <b id="info-layer-count">0</b></span>
+      <span>Displayed neurons: <b id="info-neuron-count">0</b></span>
+      <span>Displayed edges: <b id="info-weight-count">0</b></span>
+      <span>Real params (full model): <b id="info-total-params">0</b></span>
+    </div>
+    <div class="neuron-svg-wrap">
+      <svg id="svg-neurons" class="neuron-net" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+    <div class="neuron-info" style="margin-top:10px; font-size:11px;">
+      <span>💡 <b>Hover</b> any neuron to light up its connections.</span>
+      <span>🏷️ Columns map 1-to-1 to the boxes in the architecture above: <b>Embed</b> → <b>MHA heads × N blocks</b> → <b>FFN × N blocks</b> → <b>Linear</b> → <b>Softmax</b>.</span>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ========================================================================
+   NODE DESCRIPTIONS
+   ======================================================================== */
+const DESC = {
+  'token': { title: '🔤 Input Token', body: 'One token in the input sequence. Each token is an integer ID from the vocabulary. The full sequence of tokens is what we feed into the network.' },
+  'input': { title: '📥 Input Tokens', body: 'Raw token IDs — e.g. <code>[1996, 4937, 2938, 2006]</code> for "The cat sat on". Shape: <code>[batch, seq_len]</code>.' },
+  'embed': { title: '🔡 Token Embedding', body: 'A learned lookup table of shape <code>[vocab_size × d_model]</code>. Each token ID is replaced by its corresponding row vector. Output shape: <code>[batch, seq_len, d_model]</code>.' },
+  'pos':   { title: '📍 + Positional Encoding', body: 'Learned positional vectors (shape <code>[max_seq_len × d_model]</code>) are <b>added</b> to the token embeddings so the model can tell token positions apart. Transformers have no built-in order.' },
+  'mha':   { title: '🎭 Masked Multi-Head Attention', body: 'Splits the input into <b>H heads</b>. Each head computes <code>softmax(Q·Kᵀ/√d_head) · V</code> independently. A <b>causal mask</b> sets future-token scores to −∞ so token <i>t</i> can only attend to tokens ≤ <i>t</i>. Heads are concatenated and projected.' },
+  'head':  { title: '🎯 Attention Head', body: 'One of H parallel attention heads inside a Masked MHA block. Each head has its own Q, K, V projections and learns to attend to different patterns (syntax, coreference, long-range deps, etc). Dimension per head = <code>d_model / H</code>.' },
+  'norm1': { title: '➕ Add & Norm ①', body: '<b>Residual</b>: <code>x + MaskedMHA(x)</code>. Then <b>LayerNorm</b> across the feature dimension. The residual keeps gradients flowing through deep stacks; LayerNorm stabilises activations.' },
+  'ffn':   { title: '⚙️ Feed Forward Network', body: 'Position-wise MLP applied independently per token: <code>Linear(d_model → 4·d_model) → GELU → Linear(4·d_model → d_model)</code>. Adds non-linear capacity between attention steps.' },
+  'norm2': { title: '➕ Add & Norm ②', body: 'Residual + LayerNorm around the FFN. Output has the same shape as the block input, which is why N blocks can be stacked.' },
+  'block': { title: '🧱 Transformer Block', body: 'One block = Masked MHA + Add&Norm + FFN + Add&Norm. Output shape = input shape. Stack N of them. GPT-2 small uses N=12, GPT-3 uses N=96.' },
+  'linear':{ title: '📐 Linear (LM head)', body: 'Projects each final hidden vector from <code>d_model</code> back to <code>vocab_size</code>, producing raw <b>logits</b>. Often weight-tied with the input token embedding matrix.' },
+  'softmax':{title: '🎲 Softmax', body: 'Converts logits into a probability distribution: <code>p_i = exp(z_i) / Σ exp(z_j)</code>. At generation time we sample (or argmax) from this distribution to pick the next token.' },
+  'output':{ title: '📤 Output Probabilities', body: 'Final distribution <code>P(next_token | context)</code> over the full vocabulary. Training: cross-entropy against the true next token. Inference: sample → append → repeat (autoregressive).' }
+};
+
+/* ========================================================================
+   STATE
+   ======================================================================== */
+const state = {
+  layers: 6,
+  heads: 8,
+  dModel: 768,
+  vocab: 50257,
+  selectedNode: null
+};
+
+/* ========================================================================
+   LAYOUT CONSTANTS
+   ======================================================================== */
+const NODE_W = 300;
+const NODE_H = 42;
+const SVG_W = 720;
+const CX = SVG_W / 2;
+
+/* Vertical spacing between major stages */
+const PAD_TOP = 20;
+const TOKENS_Y = 50;
+const INPUT_Y = 120;
+const EMBED_Y = 180;
+const POS_Y = 240;
+
+const BLOCK_INTERNAL_H = 340;   // height of ONE transformer block region
+const BLOCK_GAP = 24;
+
+const AFTER_BLOCKS_PAD = 40;
+
+/* ========================================================================
+   RENDER
+   ======================================================================== */
+function svgEl(tag, attrs = {}) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const k in attrs) el.setAttribute(k, attrs[k]);
+  return el;
+}
+
+function render() {
+  const svg = document.getElementById('svg-main');
+  svg.innerHTML = '';
+
+  /* compute total height */
+  const blocksH = state.layers * BLOCK_INTERNAL_H + (state.layers - 1) * BLOCK_GAP;
+  const startBlocksY = POS_Y + 60;
+  const afterBlocksY = startBlocksY + blocksH + AFTER_BLOCKS_PAD;
+  const linearY = afterBlocksY + 20;
+  const softmaxY = linearY + 60;
+  const outputY = softmaxY + 60;
+  const totalH = outputY + 60;
+
+  svg.setAttribute('viewBox', `0 0 ${SVG_W} ${totalH}`);
+  svg.setAttribute('height', Math.min(totalH, 2400));
+
+  /* defs */
+  const defs = svgEl('defs');
+  defs.innerHTML = `
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" class="arrow-head"/>
+    </marker>
+    <marker id="ah-res" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" class="arrow-residual"/>
+    </marker>
+    <marker id="ah-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" class="arrow-head-attn"/>
+    </marker>
+  `;
+  svg.appendChild(defs);
+
+  /* ---------- Input token circles at the top ---------- */
+  const tokens = ['The', 'cat', 'sat', 'on', 'the'];
+  const tokCount = tokens.length;
+  const tokGap = 90;
+  const tokStartX = CX - ((tokCount - 1) * tokGap) / 2;
+
+  tokens.forEach((t, i) => {
+    const tx = tokStartX + i * tokGap;
+    /* connector line to the Input Tokens box */
+    const line = svgEl('line', {
+      x1: tx, y1: TOKENS_Y + 18,
+      x2: CX, y2: INPUT_Y - NODE_H/2 - 2,
+      stroke: '#3b4a6b', 'stroke-width': 1.5, 'stroke-dasharray': '3 3', opacity: 0.7
+    });
+    svg.appendChild(line);
+  });
+  tokens.forEach((t, i) => {
+    const tx = tokStartX + i * tokGap;
+    const g = svgEl('g', { class: 'node', 'data-node': 'token' });
+    g.appendChild(svgEl('circle', {
+      cx: tx, cy: TOKENS_Y + 18, r: 18,
+      fill: 'var(--input)', stroke: '#fff'
+    }));
+    const label = svgEl('text', { x: tx, y: TOKENS_Y + 18 });
+    label.textContent = t;
+    g.appendChild(label);
+    g.addEventListener('click', () => showInfo('token', g));
+    svg.appendChild(g);
+  });
+
+  /* ---------- Input Tokens box ---------- */
+  drawNode(svg, 'input', 'Input Tokens', 'token IDs: [batch, seq_len]', INPUT_Y, 'var(--input)');
+
+  /* ---------- Token Embedding ---------- */
+  drawEdge(svg, CX, INPUT_Y + NODE_H/2, CX, EMBED_Y - NODE_H/2 - 2);
+  drawNode(svg, 'embed', 'Token Embedding', `lookup [${state.vocab.toLocaleString()} × ${state.dModel}]`, EMBED_Y, 'var(--embed)');
+
+  /* ---------- + Positional Encoding ---------- */
+  drawEdge(svg, CX, EMBED_Y + NODE_H/2, CX, POS_Y - NODE_H/2 - 2);
+  drawNode(svg, 'pos', '+ Positional Encoding', `learned [max_seq × ${state.dModel}]`, POS_Y, 'var(--embed)');
+
+  /* ---------- Edge into first block ---------- */
+  drawEdge(svg, CX, POS_Y + NODE_H/2, CX, startBlocksY - 14);
+
+  /* ---------- Transformer blocks (stacked) ---------- */
+  for (let b = 0; b < state.layers; b++) {
+    const by = startBlocksY + b * (BLOCK_INTERNAL_H + BLOCK_GAP);
+    drawBlock(svg, b + 1, by);
+
+    /* connection from previous block (or positional enc) to this block - handled implicitly by block top arrow */
+    if (b > 0) {
+      const prevBottom = startBlocksY + (b - 1) * (BLOCK_INTERNAL_H + BLOCK_GAP) + BLOCK_INTERNAL_H;
+      drawEdge(svg, CX, prevBottom, CX, by - 2);
+    }
+  }
+
+  /* ---------- Edge out of last block ---------- */
+  const lastBlockBottom = startBlocksY + (state.layers - 1) * (BLOCK_INTERNAL_H + BLOCK_GAP) + BLOCK_INTERNAL_H;
+  drawEdge(svg, CX, lastBlockBottom, CX, linearY - NODE_H/2 - 2);
+
+  /* ---------- Linear ---------- */
+  drawNode(svg, 'linear', 'Linear (LM head)', `[${state.dModel} → ${state.vocab.toLocaleString()}]`, linearY, 'var(--linear)');
+
+  /* ---------- Softmax ---------- */
+  drawEdge(svg, CX, linearY + NODE_H/2, CX, softmaxY - NODE_H/2 - 2);
+  drawNode(svg, 'softmax', 'Softmax', 'logits → probabilities', softmaxY, 'var(--softmax)');
+
+  /* ---------- Output ---------- */
+  drawEdge(svg, CX, softmaxY + NODE_H/2, CX, outputY - NODE_H/2 - 2);
+  drawNode(svg, 'output', 'Output Probabilities', `P(next_token | context)  |V|=${state.vocab.toLocaleString()}`, outputY, 'var(--output)');
+
+  updateStats();
+}
+
+function drawNode(svg, nodeKey, label, sub, y, color) {
+  const g = svgEl('g', { class: 'node', 'data-node': nodeKey });
+  const rect = svgEl('rect', {
+    x: CX - NODE_W/2, y: y - NODE_H/2,
+    width: NODE_W, height: NODE_H, rx: 8,
+    fill: color, stroke: 'rgba(255,255,255,0.2)',
+    style: `color:${color}`
+  });
+  const t1 = svgEl('text', { x: CX, y: y - 6 });
+  t1.textContent = label;
+  const t2 = svgEl('text', { x: CX, y: y + 10, class: 'sub' });
+  t2.textContent = sub;
+  g.appendChild(rect); g.appendChild(t1); g.appendChild(t2);
+  g.addEventListener('click', () => showInfo(nodeKey, g));
+  svg.appendChild(g);
+  return g;
+}
+
+function drawEdge(svg, x1, y1, x2, y2, opts = {}) {
+  const line = svgEl('line', {
+    x1, y1, x2, y2,
+    class: 'edge' + (opts.residual ? ' residual' : ''),
+    'marker-end': opts.residual ? 'url(#ah-res)' : 'url(#ah)'
+  });
+  svg.appendChild(line);
+  return line;
+}
+
+/* Draw one transformer block starting at yTop */
+function drawBlock(svg, blockIdx, yTop) {
+  const mhaY = yTop + 40;
+  const headsY = mhaY + 80;
+  const norm1Y = headsY + 80;
+  const ffnY = norm1Y + 70;
+  const norm2Y = ffnY + 70;
+  const yBot = norm2Y + NODE_H/2 + 10;
+
+  /* Block outline */
+  const pad = 16;
+  const outlineX = CX - 250;
+  const outlineW = 500;
+  const rect = svgEl('rect', {
+    x: outlineX, y: yTop - 10,
+    width: outlineW, height: yBot - yTop + 10,
+    class: 'block-outline'
+  });
+  svg.appendChild(rect);
+
+  /* Block label badge (top-left of outline) */
+  const badgeW = 90, badgeH = 22;
+  const badge = svgEl('rect', {
+    x: outlineX + 10, y: yTop - 21,
+    width: badgeW, height: badgeH, rx: 4,
+    class: 'block-badge'
+  });
+  svg.appendChild(badge);
+  const badgeText = svgEl('text', {
+    x: outlineX + 10 + badgeW/2, y: yTop - 10,
+    'text-anchor': 'middle', 'dominant-baseline': 'middle',
+    class: 'block-badge-text'
+  });
+  badgeText.textContent = `Block ${blockIdx} / ${state.layers}`;
+  svg.appendChild(badgeText);
+
+  /* Clickable "block" overlay to explain the block concept — small icon */
+  const infoBadge = svgEl('g', { class: 'node', 'data-node': 'block' });
+  infoBadge.appendChild(svgEl('circle', {
+    cx: outlineX + outlineW - 20, cy: yTop - 10, r: 10,
+    fill: 'var(--accent)', stroke: 'rgba(255,255,255,0.3)'
+  }));
+  const qMark = svgEl('text', {
+    x: outlineX + outlineW - 20, y: yTop - 10,
+    'text-anchor': 'middle', 'dominant-baseline': 'middle',
+    fill: '#fff', 'font-size': 11, 'font-weight': 700
+  });
+  qMark.textContent = '?';
+  infoBadge.appendChild(qMark);
+  infoBadge.addEventListener('click', () => showInfo('block', infoBadge));
+  svg.appendChild(infoBadge);
+
+  /* 1. Masked MHA node */
+  drawNode(svg, `mha-${blockIdx}`, 'Masked Multi-Head Attention', `${state.heads} heads · d_head=${Math.floor(state.dModel/state.heads)}`, mhaY, 'var(--mha)');
+
+  /* 2. Attention heads row beneath MHA */
+  drawAttentionHeads(svg, blockIdx, mhaY, headsY);
+
+  /* 3. Edge from heads row to Add & Norm ① */
+  /* (drawAttentionHeads already draws lines from each head up to MHA and down to norm1 via combined routing)  */
+  drawEdge(svg, CX, headsY + 26, CX, norm1Y - NODE_H/2 - 2);
+
+  /* 4. Add & Norm ① */
+  drawNode(svg, `norm1-${blockIdx}`, 'Add & Norm ①', 'residual + LayerNorm', norm1Y, 'var(--norm)');
+
+  /* 5. FFN */
+  drawEdge(svg, CX, norm1Y + NODE_H/2, CX, ffnY - NODE_H/2 - 2);
+  drawNode(svg, `ffn-${blockIdx}`, 'Feed Forward', `Linear→GELU→Linear (${state.dModel}→${4*state.dModel}→${state.dModel})`, ffnY, 'var(--ffn)');
+
+  /* 6. Add & Norm ② */
+  drawEdge(svg, CX, ffnY + NODE_H/2, CX, norm2Y - NODE_H/2 - 2);
+  drawNode(svg, `norm2-${blockIdx}`, 'Add & Norm ②', 'residual + LayerNorm', norm2Y, 'var(--norm)');
+
+  /* Residual connections (on the right side, curving around) */
+  /* Residual around MHA: from block input (just above mhaY) to norm1 */
+  const xSideR = CX + NODE_W/2 + 40;
+  const resIn1y = mhaY - NODE_H/2 - 12;
+  drawResidualCurve(svg, CX + NODE_W/2, resIn1y, CX + NODE_W/2, norm1Y, xSideR);
+
+  /* Residual around FFN: from norm1 to norm2 */
+  drawResidualCurve(svg, CX + NODE_W/2, norm1Y, CX + NODE_W/2, norm2Y, xSideR);
+
+  /* Residual labels */
+  const rLbl1 = svgEl('text', {
+    x: xSideR + 6, y: (resIn1y + norm1Y)/2,
+    fill: 'var(--warn)', 'font-size': 9, 'font-weight': 700
+  });
+  rLbl1.textContent = 'residual';
+  svg.appendChild(rLbl1);
+
+  const rLbl2 = svgEl('text', {
+    x: xSideR + 6, y: (norm1Y + norm2Y)/2,
+    fill: 'var(--warn)', 'font-size': 9, 'font-weight': 700
+  });
+  rLbl2.textContent = 'residual';
+  svg.appendChild(rLbl2);
+}
+
+/* Draw H attention head circles between MHA node and norm1, with lines into each */
+function drawAttentionHeads(svg, blockIdx, mhaY, headsY) {
+  const H = state.heads;
+  const maxSpan = 460; // max horizontal spread
+  const gap = H === 1 ? 0 : Math.min(60, maxSpan / (H - 1));
+  const totalW = (H - 1) * gap;
+  const startX = CX - totalW / 2;
+
+  /* Lines MHA -> each head, and head -> combined point */
+  const combineY = headsY + 26;
+  for (let i = 0; i < H; i++) {
+    const hx = startX + i * gap;
+    /* MHA bottom -> head top */
+    const l1 = svgEl('line', {
+      x1: CX, y1: mhaY + NODE_H/2,
+      x2: hx, y2: headsY - 12,
+      class: 'edge head'
+    });
+    svg.appendChild(l1);
+    /* head bottom -> combine point */
+    const l2 = svgEl('line', {
+      x1: hx, y1: headsY + 12,
+      x2: CX, y2: combineY,
+      class: 'edge head'
+    });
+    svg.appendChild(l2);
+  }
+
+  /* Head circles on top */
+  for (let i = 0; i < H; i++) {
+    const hx = startX + i * gap;
+    const g = svgEl('g', { class: 'node', 'data-node': 'head' });
+    const r = H <= 8 ? 11 : (H <= 12 ? 9 : 8);
+    g.appendChild(svgEl('circle', {
+      cx: hx, cy: headsY, r,
+      fill: 'var(--head)', stroke: 'rgba(255,255,255,0.35)',
+      style: 'color: var(--head)'
+    }));
+    const t = svgEl('text', { x: hx, y: headsY, 'font-size': r < 10 ? 8 : 9 });
+    t.textContent = `h${i+1}`;
+    g.appendChild(t);
+    g.addEventListener('click', () => showInfo('head', g));
+    svg.appendChild(g);
+  }
+
+  /* small "concat" label at combine point */
+  const lbl = svgEl('text', {
+    x: CX + 40, y: combineY - 2,
+    fill: 'var(--muted)', 'font-size': 10, 'font-weight': 600
+  });
+  lbl.textContent = '↓ concat + proj';
+  svg.appendChild(lbl);
+}
+
+function drawResidualCurve(svg, x1, y1, x2, y2, xSide) {
+  const path = `M ${x1} ${y1}
+                C ${xSide} ${y1}, ${xSide} ${y2}, ${x2} ${y2}`;
+  const p = svgEl('path', {
+    d: path,
+    class: 'edge residual',
+    'marker-end': 'url(#ah-res)'
+  });
+  svg.appendChild(p);
+}
+
+/* ========================================================================
+   INFO PANEL + SELECTION
+   ======================================================================== */
+function showInfo(key, nodeEl) {
+  /* strip any trailing -N from the key */
+  const baseKey = key.replace(/-\d+$/, '');
+  const data = DESC[baseKey] || { title: 'Node', body: 'No description available.' };
+
+  document.getElementById('info-current').innerHTML = `
+    <h4>${data.title}</h4>
+    <p>${data.body}</p>
+  `;
+
+  document.querySelectorAll('.node.selected').forEach(n => n.classList.remove('selected'));
+  if (nodeEl) nodeEl.classList.add('selected');
+}
+
+/* ========================================================================
+   STATS
+   ======================================================================== */
+function formatNum(n) {
+  if (n >= 1e9) return (n/1e9).toFixed(2) + 'B';
+  if (n >= 1e6) return (n/1e6).toFixed(2) + 'M';
+  if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
+  return n.toString();
+}
+
+function updateStats() {
+  /* rough parameter count — a reasonable GPT-style estimate */
+  const d = state.dModel;
+  const vocab = state.vocab;
+  const N = state.layers;
+
+  /* Per-block: attention (4·d²) + FFN (8·d²) + 2 layernorms (≈0, small) ≈ 12·d² */
+  const perBlock = 12 * d * d + 13 * d; // + small LN/bias terms
+  const blocksTotal = N * perBlock;
+  const embedding = vocab * d;
+  const posEmbed = 1024 * d; // assume max_seq=1024
+  const finalLN = 2 * d;
+  /* LM head often weight-tied with embedding → don't double-count */
+  const total = blocksTotal + embedding + posEmbed + finalLN;
+
+  const dHead = Math.floor(d / state.heads);
+
+  document.getElementById('stats').innerHTML = `
+    <div class="stat"><div class="lbl">Total Params</div><div class="val">${formatNum(total)}</div></div>
+    <div class="stat"><div class="lbl">Blocks (N)</div><div class="val">${N}</div></div>
+    <div class="stat"><div class="lbl">Heads / block</div><div class="val">${state.heads}</div></div>
+    <div class="stat"><div class="lbl">Total heads</div><div class="val">${N * state.heads}</div></div>
+    <div class="stat"><div class="lbl">d_model</div><div class="val">${d}</div></div>
+    <div class="stat"><div class="lbl">d_head</div><div class="val">${dHead}</div></div>
+    <div class="stat"><div class="lbl">FFN hidden</div><div class="val small">${4*d}</div></div>
+    <div class="stat"><div class="lbl">Vocab</div><div class="val small">${vocab.toLocaleString()}</div></div>
+  `;
+}
+
+/* ========================================================================
+   WIRING
+   ======================================================================== */
+function wireSlider(sliderId, valueId, stateKey, presetsId) {
+  const slider = document.getElementById(sliderId);
+  const valueEl = document.getElementById(valueId);
+  slider.addEventListener('input', () => {
+    state[stateKey] = parseInt(slider.value, 10);
+    valueEl.textContent = state[stateKey];
+    updatePresetActive(presetsId, state[stateKey]);
+    render();
+  });
+
+  /* preset buttons */
+  document.querySelectorAll(`#${presetsId} button`).forEach(btn => {
+    btn.addEventListener('click', () => {
+      const v = parseInt(btn.dataset.val, 10);
+      slider.value = v;
+      state[stateKey] = v;
+      valueEl.textContent = v;
+      updatePresetActive(presetsId, v);
+      render();
+    });
+  });
+}
+
+function updatePresetActive(presetsId, value) {
+  document.querySelectorAll(`#${presetsId} button`).forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.val, 10) === value);
+  });
+}
+
+wireSlider('slider-layers', 'val-layers', 'layers', 'presets-layers');
+wireSlider('slider-heads', 'val-heads', 'heads', 'presets-heads');
+wireSlider('slider-dmodel', 'val-dmodel', 'dModel', 'presets-dmodel');
+
+/* initial render */
+render();
+updatePresetActive('presets-layers', state.layers);
+updatePresetActive('presets-heads', state.heads);
+updatePresetActive('presets-dmodel', state.dModel);
+
+/* ========================================================================
+   =========== NEURON-LEVEL NETWORK VISUALIZATION ==========================
+   =========== (mirrors the transformer state above) =======================
+   ======================================================================== */
+
+const neuronState = {
+  seqLen: 5,
+  cap: 16,        // visual cap for neurons per stage
+  density: 30     // % of connections drawn
+};
+
+const NEURON_COLORS = ['#0d0d0d', '#2a2a2a', '#4a4a4a', '#6b6b6b', '#9a9a9a', '#cfcfcf', '#f5f5f5'];
+function neuronShade(seed) {
+  const idx = Math.abs(Math.floor(Math.sin(seed) * 10000)) % NEURON_COLORS.length;
+  return NEURON_COLORS[idx];
+}
+
+/* Build the list of stages (columns of neurons) that mirror the transformer
+   defined by `state.layers`, `state.heads`, `state.dModel`.
+   Each stage = { label, sub, neurons (after capping), realSize } */
+function buildStages() {
+  const stages = [];
+  const cap = neuronState.cap;
+
+  /* 1. Input embedding — d_model neurons per token, capped */
+  const embedSize = state.dModel;
+  stages.push({
+    label: 'Embed + Pos',
+    sub: `d_model=${embedSize}`,
+    realSize: embedSize,
+    visibleSize: Math.min(embedSize, cap),
+    type: 'embed'
+  });
+
+  /* 2. For each transformer block: one column for MHA (split by heads), one for FFN */
+  for (let b = 0; b < state.layers; b++) {
+    const dHead = Math.floor(state.dModel / state.heads);
+
+    /* MHA stage — shows heads as clusters */
+    stages.push({
+      label: `B${b+1} · MHA`,
+      sub: `${state.heads} heads × d_head=${dHead}`,
+      realSize: state.dModel,          // concat of all heads = d_model
+      visibleSize: Math.min(state.dModel, cap),
+      type: 'mha',
+      heads: state.heads,
+      blockIdx: b + 1
+    });
+
+    /* FFN hidden stage — 4 × d_model */
+    const ffnHidden = 4 * state.dModel;
+    stages.push({
+      label: `B${b+1} · FFN`,
+      sub: `hidden=${ffnHidden}`,
+      realSize: ffnHidden,
+      visibleSize: Math.min(ffnHidden, cap),
+      type: 'ffn',
+      blockIdx: b + 1
+    });
+  }
+
+  /* 3. Linear head — d_model back down before softmax */
+  stages.push({
+    label: 'Linear',
+    sub: `→ vocab_size`,
+    realSize: state.dModel,
+    visibleSize: Math.min(state.dModel, cap),
+    type: 'linear'
+  });
+
+  /* 4. Softmax / output — show a small handful of top vocab neurons */
+  stages.push({
+    label: 'Softmax',
+    sub: `|V|=${state.vocab.toLocaleString()}`,
+    realSize: state.vocab,
+    visibleSize: Math.min(8, cap),       // always a thin output column for readability
+    type: 'softmax'
+  });
+
+  return stages;
+}
+
+/* Real parameter count of the full (uncapped) transformer — same calc as updateStats but returned */
+function realParamCount() {
+  const d = state.dModel;
+  const N = state.layers;
+  const perBlock = 12 * d * d + 13 * d;
+  const blocks = N * perBlock;
+  const embed = state.vocab * d + 1024 * d;
+  return blocks + embed + 2 * d;
+}
+
+function renderNeurons() {
+  const svg = document.getElementById('svg-neurons');
+  svg.innerHTML = '';
+
+  const stages = buildStages();
+  const L = stages.length;
+
+  /* sizing */
+  const maxVisible = Math.max(...stages.map(s => s.visibleSize));
+  const neuronR = maxVisible > 24 ? 5 : (maxVisible > 16 ? 7 : (maxVisible > 10 ? 10 : 13));
+  const vGap = neuronR * 2 + 5;
+
+  const topPad = 56;
+  const bottomPad = 20;
+  const leftPad = 40;
+  const rightPad = 40;
+  const colGap = 180;
+
+  const height = topPad + maxVisible * vGap + bottomPad;
+  const width  = Math.max(800, leftPad + rightPad + (L - 1) * colGap);
+
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  svg.setAttribute('height', height);
+
+  /* Compute positions per stage */
+  const positions = stages.map((stage, li) => {
+    const x = leftPad + (li * (width - leftPad - rightPad)) / Math.max(1, L - 1);
+    const count = stage.visibleSize;
+    const totalH = count * vGap;
+    const startY = topPad + (maxVisible * vGap - totalH) / 2 + vGap / 2;
+    const nodes = [];
+    for (let ni = 0; ni < count; ni++) {
+      nodes.push({ x, y: startY + ni * vGap });
+    }
+    return nodes;
+  });
+
+  /* Labels */
+  stages.forEach((stage, li) => {
+    const x = positions[li][0].x;
+    const lbl = svgEl('text', { x, y: 18, class: 'layer-label' });
+    lbl.textContent = stage.label;
+    svg.appendChild(lbl);
+    const sub = svgEl('text', { x, y: 34, class: 'layer-sublabel' });
+    sub.textContent = stage.sub;
+    svg.appendChild(sub);
+    if (stage.realSize > stage.visibleSize) {
+      const cap = svgEl('text', { x, y: 47, class: 'layer-sublabel' });
+      cap.setAttribute('style', 'fill:var(--warn); font-size:9px;');
+      cap.textContent = `(showing ${stage.visibleSize} of ${stage.realSize.toLocaleString()})`;
+      svg.appendChild(cap);
+    }
+  });
+
+  /* Connections between adjacent stages — sampled at density% for readability */
+  const density = neuronState.density / 100;
+  let drawnEdges = 0;
+  const rng = mulberry32(12345);  // deterministic sampler
+
+  for (let li = 0; li < L - 1; li++) {
+    const from = positions[li];
+    const to = positions[li + 1];
+    const fromStage = stages[li];
+    const toStage = stages[li + 1];
+
+    /* If source is MHA with heads, color edges per head group */
+    const mhaHeads = fromStage.type === 'mha' ? fromStage.heads : null;
+
+    from.forEach((a, ai) => {
+      to.forEach((b, bi) => {
+        if (rng() > density) return;   // sample
+        const w = 0.5 + rng() * 1.4;
+        let stroke = '#22c55e';
+        let op = 0.55;
+        /* color by head if source is MHA */
+        if (mhaHeads) {
+          const headIdx = Math.floor(ai / (from.length / mhaHeads));
+          const hues = ['#22c55e', '#8b5cf6', '#22d3ee', '#f59e0b', '#f43f5e', '#a78bfa', '#10b981', '#eab308'];
+          stroke = hues[headIdx % hues.length];
+          op = 0.5;
+        }
+        const line = svgEl('line', {
+          x1: a.x + neuronR, y1: a.y,
+          x2: b.x - neuronR, y2: b.y,
+          class: 'connection',
+          stroke,
+          'stroke-opacity': op,
+          'stroke-width': w.toFixed(2),
+          'data-from-layer': li,
+          'data-from-idx': ai,
+          'data-to-layer': li + 1,
+          'data-to-idx': bi
+        });
+        svg.appendChild(line);
+        drawnEdges++;
+      });
+    });
+  }
+
+  /* Neurons on top */
+  positions.forEach((nodes, li) => {
+    const stage = stages[li];
+    nodes.forEach((n, ni) => {
+      let fill;
+      if (stage.type === 'mha' && stage.heads) {
+        /* color neurons by head group */
+        const headIdx = Math.floor(ni / (nodes.length / stage.heads));
+        const hues = ['#22c55e', '#8b5cf6', '#22d3ee', '#f59e0b', '#f43f5e', '#a78bfa', '#10b981', '#eab308'];
+        fill = hues[headIdx % hues.length];
+      } else if (stage.type === 'embed') {
+        fill = '#60a5fa';
+      } else if (stage.type === 'ffn') {
+        fill = '#22d3ee';
+      } else if (stage.type === 'linear') {
+        fill = '#14b8a6';
+      } else if (stage.type === 'softmax') {
+        fill = '#eab308';
+      } else {
+        fill = neuronShade(li * 13.7 + ni * 3.14);
+      }
+      const c = svgEl('circle', {
+        cx: n.x, cy: n.y, r: neuronR,
+        class: 'neuron',
+        fill,
+        'data-layer': li,
+        'data-idx': ni
+      });
+      c.addEventListener('mouseenter', () => highlightNeuron(li, ni));
+      c.addEventListener('mouseleave', () => clearHighlight());
+      svg.appendChild(c);
+    });
+  });
+
+  /* Stats */
+  const totalVisible = stages.reduce((a, s) => a + s.visibleSize, 0);
+  document.getElementById('info-layer-count').textContent = L;
+  document.getElementById('info-neuron-count').textContent = totalVisible.toLocaleString();
+  document.getElementById('info-weight-count').textContent = drawnEdges.toLocaleString();
+  document.getElementById('info-total-params').textContent = formatNum(realParamCount());
+}
+
+/* Tiny deterministic PRNG so the sampled connections don't flicker each render */
+function mulberry32(seed) {
+  let t = seed;
+  return function () {
+    t += 0x6D2B79F5;
+    let r = t;
+    r = Math.imul(r ^ (r >>> 15), r | 1);
+    r ^= r + Math.imul(r ^ (r >>> 7), r | 61);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function highlightNeuron(li, ni) {
+  document.querySelectorAll('#svg-neurons .connection').forEach(ln => {
+    const fl = parseInt(ln.dataset.fromLayer, 10);
+    const fi = parseInt(ln.dataset.fromIdx, 10);
+    const tl = parseInt(ln.dataset.toLayer, 10);
+    const ti = parseInt(ln.dataset.toIdx, 10);
+    if ((fl === li && fi === ni) || (tl === li && ti === ni)) {
+      ln.classList.add('highlighted');
+    }
+  });
+}
+
+function clearHighlight() {
+  document.querySelectorAll('#svg-neurons .connection.highlighted')
+    .forEach(ln => ln.classList.remove('highlighted'));
+}
+
+/* Wire local sliders */
+function wireNeuronSlider(id, valId, key, fmt) {
+  const sl = document.getElementById(id);
+  const vl = document.getElementById(valId);
+  sl.addEventListener('input', () => {
+    neuronState[key] = parseInt(sl.value, 10);
+    vl.textContent = fmt ? fmt(neuronState[key]) : neuronState[key];
+    renderNeurons();
+  });
+}
+wireNeuronSlider('slider-seq', 'val-seq', 'seqLen');
+wireNeuronSlider('slider-cap', 'val-cap', 'cap');
+wireNeuronSlider('slider-density', 'val-density', 'density', v => v + '%');
+
+/* Hook into the main architecture sliders so the neuron view updates too */
+const _origRender = render;
+render = function () {
+  _origRender();
+  if (typeof renderNeurons === 'function') renderNeurons();
+};
+
+/* Boot */
+renderNeurons();
+</script>
+
+<footer style="max-width:1400px; margin:28px auto 0 auto; padding:18px 22px; background:linear-gradient(135deg,#131d38 0%,#0f172a 100%); border:1px solid #1f2a44; border-radius:14px; text-align:center; box-shadow:0 10px 30px rgba(0,0,0,0.35);">
+  <p style="margin:0; font-size:14px; color:#e6edf6; font-weight:600; letter-spacing:0.3px;">Created by <span style="color:#22d3ee;">Maneesha Rajapaksha</span> — <span style="color:#7c9cff;">SLIPD Academy</span></p>
+</footer>
+
+</body>
+</html>
