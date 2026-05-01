@@ -70,7 +70,7 @@ class MultiHeadAttention(nn.Module):
         weights = self.attn_dropout(weights)
 
         out = weights @ V
-        out = out.transpose(1, 2).contiguous().view(B, T, C)
+        out = out.transpose(1, 2).reshape(B, T, C)
 
         out = self.out_proj(out)
         out = self.out_dropout(out)
