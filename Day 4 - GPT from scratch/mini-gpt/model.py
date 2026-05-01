@@ -24,44 +24,59 @@ class Embeddings(nn.Module):
         out = self.dropout(tok + pos)   # [B, T, d_model]
         return out
 
-
-
 class MultiHeadAttention(nn.Module):
-    def __init__(self, cfg: GPTConfig):
+    def __init__(self, cfg):
         super().__init__()
+
         assert cfg.d_model % cfg.n_heads == 0
+
         self.n_heads = cfg.n_heads
-        self.d_model = cfg.d_model
-        self.d_k = cfg.d_model // cfg.n_heads
-        self.qkv_proj = nn.Linear(cfg.d_model, 3 * cfg.d_model, bias=False)
+        self.head_dim = cfg.d_model // cfg.n_heads
+        self.seq_len = cfg.seq_len
+
+        self.W_q = nn.Linear(cfg.d_model, cfg.d_model, bias=False)
+        self.W_k = nn.Linear(cfg.d_model, cfg.d_model, bias=False)
+        self.W_v = nn.Linear(cfg.d_model, cfg.d_model, bias=False)
+
         self.out_proj = nn.Linear(cfg.d_model, cfg.d_model, bias=False)
+
         self.attn_dropout = nn.Dropout(cfg.dropout)
         self.out_dropout = nn.Dropout(cfg.dropout)
-        self.register_buffer("mask", torch.triu(torch.ones(cfg.seq_len, cfg.seq_len), diagonal=1).bool())
+
+        self.register_buffer(
+            "mask",
+            torch.triu(torch.ones(cfg.seq_len, cfg.seq_len), diagonal=1).bool()
+        )
 
     def forward(self, x):
         B, T, C = x.shape
-        qkv = self.qkv_proj(x)
-        Q, K, V = qkv.split(self.d_model, dim=-1)
 
-        def reshape(t):
-            return t.view(B, T, self.n_heads, self.d_k).transpose(1, 2)
+        Q = self.W_q(x)
+        K = self.W_k(x)
+        V = self.W_v(x)
 
-        Q = reshape(Q)
-        K = reshape(K)
-        V = reshape(V)
+        Q = Q.view(B, T, self.n_heads, self.head_dim).transpose(1, 2)
+        K = K.view(B, T, self.n_heads, self.head_dim).transpose(1, 2)
+        V = V.view(B, T, self.n_heads, self.head_dim).transpose(1, 2)
 
-        scale = math.sqrt(self.d_k)
-        scores = Q @ K.transpose(-2, -1) / scale
-        scores = scores.masked_fill(self.mask[:T, :T], float('-inf'))
+        scores = (Q @ K.transpose(-2, -1)) / math.sqrt(self.head_dim)
+
+        scores = scores.masked_fill(
+            self.mask[:T, :T],
+            torch.finfo(scores.dtype).min
+        )
 
         weights = F.softmax(scores, dim=-1)
         weights = self.attn_dropout(weights)
 
         out = weights @ V
         out = out.transpose(1, 2).contiguous().view(B, T, C)
-        out = self.out_dropout(self.out_proj(out))
+
+        out = self.out_proj(out)
+        out = self.out_dropout(out)
+
         return out
+
 
 
 class FFN(nn.Module):
@@ -107,8 +122,6 @@ class GPT(nn.Module):
         self.final_norm = nn.LayerNorm(cfg.d_model)
         self.out_head   = nn.Linear(cfg.d_model, cfg.vocab_size, bias=False)
 
-        # 🔥 Weight tying
-        # self.out_head.weight = self.embed.tok_emb.weight
 
     def forward(self, x):
         x = self.embed(x)       # [B, T] → [B, T, d_model]
