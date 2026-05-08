@@ -5,7 +5,6 @@ import os
 import time
 
 from torch.utils.data import Dataset, DataLoader
-
 from config import GPTConfig
 from model import GPT
 from tokenizer import Tokenizer
@@ -27,8 +26,11 @@ class SFTDataset(Dataset):
     def __getitem__(self, idx):
         item = self.data[idx]
 
-        prompt_ids = self.tokenizer.encode(item["prompt"])
-        response_ids = self.tokenizer.encode(item["response"])
+        prompt = f"User: {item['prompt']}\nAssistant:"
+        response = item["response"] + "<|endoftext|>"
+
+        prompt_ids = self.tokenizer.encode(prompt)
+        response_ids = self.tokenizer.encode(response)
 
         tokens = prompt_ids + response_ids
 
@@ -86,7 +88,7 @@ tokenizer = Tokenizer()
 
 model = GPT(cfg).to(device)
 
-ckpt = torch.load("checkpoints/gpt_step_6000.pt", map_location=device)
+ckpt = torch.load("checkpoints/gpt_step_4500.pt", map_location=device)
 model.load_state_dict(ckpt["model"])
 print("Loaded pretrained model")
 
